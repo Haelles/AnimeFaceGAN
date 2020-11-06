@@ -1,0 +1,5 @@
+visdom
+fire
+torchvision
+tqdm
+ipdb
