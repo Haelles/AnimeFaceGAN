@@ -1,4 +1,3 @@
-# train, generate ; dataset
 from Config import opt
 import torch
 import torchvision
@@ -21,7 +20,7 @@ from tensorboardX import SummaryWriter
 def train(**kwargs):
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    writer = SummaryWriter('runs/debug_ori_data_02')
+    writer = SummaryWriter('runs/week6_q5')
     iter_count = opt.iter_count
 
     print("begin to load data\n")
@@ -62,6 +61,7 @@ def train(**kwargs):
     for i in range(opt.epoch):
         meter_d = 0.0
         meter_g = 0.0
+        cnt = 0
 
         for j, (data, _) in tqdm.tqdm(enumerate(true_data_loader)):
             data = data.to(device)
@@ -92,13 +92,14 @@ def train(**kwargs):
             meter_g += float(loss_g)
 
             iter_count += 1
-            if (j + 1) % 31 == 0:
+            if j % 30 == 0:
                 writer.add_scalar('mini_loss_g', loss_g.item(), iter_count)  # mini batch loss
                 writer.add_scalar('mini_loss_d', float(0.5 * loss_d1 + 0.5 * loss_d2), iter_count)
+            cnt += 1
 
         # record epoch loss
-        meter_g /= (j + 1)
-        meter_d /= (j + 1)
+        meter_g /= cnt
+        meter_d /= cnt
         with torch.no_grad():
             discriminator.eval()
             generator.eval()
@@ -106,6 +107,8 @@ def train(**kwargs):
             fake_images = generator(noises)
             pred = discriminator(fake_images)
             loss_g = cal_g(pred, true_labels)
+            discriminator.train()
+            generator.train()
 
             top_k = pred.topk(opt.generate_num)[1]
             result = []
@@ -118,18 +121,20 @@ def train(**kwargs):
                     accuracy += 1.0
             accuracy = round(accuracy / opt.batch_size, 2)
 
-            writer.add_scalar('epoch_loss_g', meter_g, i + opt.epoch_count)
-            writer.add_scalar('epoch_loss_d', meter_d, i + opt.epoch_count)
-            writer.add_scalar('accuracy', accuracy, i + opt.epoch_count)
-            img = torchvision.utils.make_grid(result, normalize=True, range=(-1, 1))
-            writer.add_image('img' + str(i + 1), img, i + opt.epoch_count)
-            torchvision.utils.save_image(result, "images/epoch-" + str(i + opt.epoch_count) + "-loss_g-" + str(
+            writer.add_scalar('epoch_loss_g', meter_g, i + opt.epoch_count + 1)
+            writer.add_scalar('epoch_loss_d', meter_d, i + opt.epoch_count + 1)
+            writer.add_scalar('accuracy', accuracy, i + opt.epoch_count + 1)
+
+            root = "resize/fake/"
+            for k in range(opt.batch_size):
+                torchvision.utils.save_image(fake_images[k], root + str(i + 1) + ".png", normalize=True, range=(-1, 1))
+            writer.add_scalar('iter_fid', cal_fid(), i + opt.epoch_count + 1)
+
+            torchvision.utils.save_image(result, "images/epoch-" + str(i + opt.epoch_count + 1) + "-loss_g-" + str(
                 round(loss_g.item(), 4)) + "-accuracy-" + str(accuracy) + time.strftime("-%H:%M:%S") + ".png",
                                          normalize=True, range=(-1, 1))
-            # print("epoch:%d | avg_loss_d: %.4f | avg_loss_g: %.4f | accuracy: %.2f\n" % (i + 1, meter_d, meter_g, accuracy))
-
-            discriminator.train()
-            generator.train()
+            # print("epoch:%d | avg_loss_d: %.4f | avg_loss_g: %.4f | accuracy: %.2f\n"
+            # % (i + 1, meter_d, meter_g, accuracy))
 
         if (i + 1) % 10 == 0:
             discriminator.save()
@@ -137,14 +142,14 @@ def train(**kwargs):
 
         if meter_d > pre_loss_d:
             lr1 *= opt.lr_decay
-            print("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count, lr1))
+            print("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
             for param_group in optimizer_d.param_groups:
                 param_group['lr'] = lr1
         pre_loss_d = meter_d
 
         if meter_g > pre_loss_g:
             lr2 *= opt.lr_decay
-            print("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count, lr2))
+            print("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
             for param_group in optimizer_g.param_groups:
                 param_group['lr'] = lr2
         pre_loss_g = meter_g
@@ -191,95 +196,52 @@ def get_net(device):
     return discriminator, generator
 
 
-def get_broken():
-    root = "data/cropped/"
-    files = os.listdir(root)
-    file_list = [
-        path for path in files
-    ]
-    for path in file_list:
-        try:
-            img = PIL.Image.open(root + path, "r")
-        except PIL.UnidentifiedImageError:
-            os.remove(root + path)
-            print("remove" + root + path + "\n")
-        except IOError:
-            os.remove(root + path)
-            print("remove" + root + path + "\n")
-        except FileNotFoundError:
-            os.remove(root + path)
-            print("remove" + root + path + "\n")
-
-
-def remove_broken():
-    original = os.getcwd()
-    file = open("remove", "r")
-    os.chdir(os.getcwd() + "/data/cropped")
-    for file in file.readlines():
-        file_path = file.split("\n")[0]
-        # print(file_path)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(file_path)
-    os.chdir(original)
-
-
-def get_96_size():
+def cal_fid():
+    """
+    与256张真实图片对比，每张图片通过Illustation2vec feature extractor得到一个1*4096向量
+    然后计算FID
+    :return:fid
+    """
+    from scipy.linalg import sqrtm
+    import i2v
+    import numpy as np
     import os
-    import shutil
 
-    source_path = os.path.abspath(r'../动漫头像/多类头像资源')
-    target_path = os.path.abspath(r'../动漫头像/96-96')
+    illust2vec = i2v.make_i2v_with_chainer("illust2vec_ver200.caffemodel")
 
-    if not os.path.exists(target_path):
-        os.makedirs(target_path)
+    # 真实图片的特征向量
+    root = "resize/true/"
+    paths = os.listdir(root)
+    images_list = [Image.open(root + path) for path in paths]
+    true_vec = illust2vec.extract_feature(images_list)
 
-    if os.path.exists(source_path):
-        # root 所指的是当前正在遍历的这个文件夹的本身的地址
-        # dirs 是一个 list，内容是该文件夹中所有的目录的名字(不包括子目录)
-        # files 同样是 list, 内容是该文件夹中所有的文件(不包括子目录)
-        for root, dirs, files in os.walk(source_path):
-            for file in files:
-                src_file = os.path.join(root, file)
-                shutil.copy(src_file, target_path)
-                # print(src_file)
-    print('copy files finished!')
+    # 计算生成图片的特征向量
+    root = "resize/fake/"
+    paths = os.listdir(root)
+    images_list = [Image.open(root + path) for path in paths]
+    fake_vec = illust2vec.extract_feature(images_list)
+    # 清空文件夹，下次继续使用
+    for path in paths:
+        os.remove(root + path)
 
-
-def try_fid(**kwargs):
-    import shutil
-    import cv2
-    opt._parse(kwargs)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    noises = torch.randn(opt.batch_size, opt.noise_dimension, 1, 1).to(device)
-    discriminator, generator = get_net(device)
-    discriminator.eval()
-    generator.eval()
-
-    root = "data/cropped/"
-    files = os.listdir(root)
-    file_list = [
-        path for path in files
-    ]
-    # import os
-    cnt = 0
-    for file in file_list:
-        img = cv2.resize(cv2.imread(root + file), (96, 96), interpolation=cv2.INTER_AREA)
-        cv2.imwrite("resize/" + str(cnt) + ".jpg", img)
-        cnt += 1
-    root = "resize/"
-    files = os.listdir(root)
-    file_list = [ path for path in files]
-    with torch.no_grad():
-        fake_images = generator(noises)
-        for i in range(opt.batch_size):
-            torchvision.utils.save_image(fake_images[i], "try_fid/fake/" + str(i) + ".png", normalize=True, range=(-1, 1))
-            shutil.copy(root + file_list[i], "try_fid/true/")
+    # 计算FID
+    mu1 = true_vec.mean(axis=0)
+    sigma1 = np.cov(true_vec, rowvar=False)
+    mu2 = fake_vec.mean(axis=0)
+    sigma2 = np.cov(fake_vec, rowvar=False)
+    # calculate sum squared difference between means
+	sum_squared_diff = np.sum((mu1 - mu2)**2.0)
+    # calculate sqrt of product between cov
+	covmean = sqrtm(sigma1.dot(sigma2))
+    # check and correct imaginary numbers from sqrt
+	if np.iscomplexobj(covmean):
+        covmean = covmean.real
+    # calculate score
+	return sum_squared_diff + np.trace(sigma1 + sigma2 - 2.0 * covmean)
 
 
 if __name__ == '__main__':
     import fire
-
     fire.Fire()
 
 
