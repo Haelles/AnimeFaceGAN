@@ -71,6 +71,12 @@ def get_96_size():
     print('copy files finished!')
 
 
+def make_fake_dir():
+    root = "./resize/fake"
+    for i in range(256):
+        os.mkdir(root + str(i + 1))
+
+
 if __name__ == '__main__':
     import fire
     fire.Fire()

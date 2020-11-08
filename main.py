@@ -21,7 +21,7 @@ import i2v
 def train(**kwargs):
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    writer = SummaryWriter('runs/week6_q5')
+    writer = SummaryWriter('runs/week06_q7')
     iter_count = opt.iter_count
 
     print("begin to load data\n")
@@ -35,26 +35,27 @@ def train(**kwargs):
     true_data_loader = DataLoader(true_dataset, opt.batch_size, num_workers=opt.num_workers, drop_last=True,
                                   shuffle=True)
     true_labels = torch.ones(opt.batch_size).to(device)
-    one_sided_label_smoothing = torch.ones(opt.batch_size).fill_(0.9).to(device)
+    # one_sided_label_smoothing = torch.ones(opt.batch_size).fill_(0.9).to(device)
     fake_labels = torch.zeros(opt.batch_size).to(device)
     noises = torch.randn(opt.batch_size, opt.noise_dimension, 1, 1).to(device)
-    fix_noises = torch.randn(opt.batch_size, opt.noise_dimension, 1, 1).to(device)  # 固定值，用于save/generate
+    # fix_noises = torch.randn(opt.batch_size, opt.noise_dimension, 1, 1).to(device)  # 固定值，用于save/generate
 
     print("load data success\nbegin to construct net\n")
     discriminator, generator = get_net(device)
 
     lr1 = opt.lr1
     lr2 = opt.lr2
+    LAMBDA = opt.LAMBDA
     optimizer_d = optim.Adam(discriminator.parameters(), lr=lr1, betas=(opt.beta1, 0.999))
     optimizer_g = optim.Adam(generator.parameters(), lr=lr2, betas=(opt.beta1, 0.999))
 
-    cal_d = nn.BCELoss().to(device)
-    cal_g = nn.BCELoss().to(device)
+    # cal_d = nn.BCELoss().to(device)
+    # cal_g = nn.BCELoss().to(device)
 
     discriminator.train()
     generator.train()
 
-    illust2vec = i2v.make_i2v_with_chainer("illust2vec_ver200.caffemodel")
+    # illust2vec = i2v.make_i2v_with_chainer("illust2vec_ver200.caffemodel")
     print("construct net success\nbegin to train\n")
 
     pre_loss_g = 1e4
@@ -65,39 +66,40 @@ def train(**kwargs):
         meter_g = 0.0
         cnt = 0
 
-        for j, (data, _) in tqdm.tqdm(enumerate(true_data_loader)):
-            data = data.to(device)
+        for j, (true_images, _) in tqdm.tqdm(enumerate(true_data_loader)):
+            true_images = true_images.to(device)
             optimizer_d.zero_grad()
-            res = discriminator(data)
-            loss_d1 = cal_d(res, true_labels)
+            res = discriminator(true_images)
+            loss_d1 = -1 * res.mean()
             loss_d1.backward()
 
             noises.copy_(torch.randn(opt.batch_size, opt.noise_dimension, 1, 1))
             fake_images = generator(noises).detach()
             res = discriminator(fake_images)
-            loss_d2 = cal_d(res, fake_labels)
+            loss_d2 = res.mean()
             loss_d2.backward()
 
+            loss_d3 = cal_gradient_penalty(discriminator, device, true_images, fake_images, LAMBDA)
+            loss_d3.backward()
             optimizer_d.step()
-            # 真图片和假图片各反向一次，但计算loss时合起来算一次
-            temp_loss_d = float(0.5 * loss_d1 + 0.5 * loss_d2)
+
+            temp_loss_d = loss_d1 + loss_d2 + loss_d3
             meter_d += float(temp_loss_d)
 
-            # 每训练5次判别器，训练1次生成器 (result: bad loss)
-            # if (j + 1) % 5 == 0:
-            optimizer_g.zero_grad()
-            fake_images = generator(noises)
-            pred = discriminator(fake_images)
-            loss_g = cal_g(pred, true_labels)
-            loss_g.backward()
-            optimizer_g.step()
-            meter_g += float(loss_g)
-
-            iter_count += 1
-            if j % 30 == 0:
-                writer.add_scalar('mini_loss_g', loss_g.item(), iter_count)  # mini batch loss
-                writer.add_scalar('mini_loss_d', float(0.5 * loss_d1 + 0.5 * loss_d2), iter_count)
-            cnt += 1
+            # 每训练5次判别器，训练1次生成器
+            if (j + 1) % 5 == 0:
+                optimizer_g.zero_grad()
+                fake_images = generator(noises)
+                pred = discriminator(fake_images)
+                loss_g = -1 * pred.mean()
+                loss_g.backward()
+                optimizer_g.step()
+                meter_g += float(loss_g)
+                if j % 30 == 0:
+                    writer.add_scalar('mini_loss_g', loss_g.item(), iter_count)  # mini batch loss
+                    writer.add_scalar('mini_loss_d', float(0.5 * loss_d1 + 0.5 * loss_d2), iter_count)
+            cnt += 1  # 1 -> 248
+            iter_count += 1  # 1 -> 248iters * 60 epochs
 
         # record epoch loss
         meter_g /= cnt
@@ -108,11 +110,12 @@ def train(**kwargs):
             noises.copy_(torch.randn(opt.batch_size, opt.noise_dimension, 1, 1))
             fake_images = generator(noises)
             pred = discriminator(fake_images)
-            loss_g = cal_g(pred, true_labels)
+            loss_g = -1 * pred.mean()
             discriminator.train()
             generator.train()
 
-            root = "resize/fake/"
+            # 事先用os.mkdir建好文件夹，后续用CPU并行计算FID
+            root = "resize/fake/" + str(i + 1)
             for k in range(opt.batch_size):
                 torchvision.utils.save_image(fake_images[k], root + str(k + 1) + ".jpg", normalize=True, range=(-1, 1))
 
@@ -122,19 +125,19 @@ def train(**kwargs):
                 result.append(fake_images[num])
 
             accuracy = 0.0
-            for p in pred.tolist():
-                if p > 0.5:
-                    accuracy += 1.0
-            accuracy = round(accuracy / opt.batch_size, 2)
+            # for p in pred.tolist():
+            #     if p > 0.5:
+            #         accuracy += 1.0
+            # accuracy = round(accuracy / opt.batch_size, 2)
 
             writer.add_scalar('epoch_loss_g', meter_g, i + opt.epoch_count + 1)
             writer.add_scalar('epoch_loss_d', meter_d, i + opt.epoch_count + 1)
-            writer.add_scalar('accuracy', accuracy, i + opt.epoch_count + 1)
+            # writer.add_scalar('accuracy', accuracy, i + opt.epoch_count + 1)
 
-            writer.add_scalar('epoch_fid', cal_fid(illust2vec), i + opt.epoch_count + 1)
+            # writer.add_scalar('epoch_fid', cal_fid(illust2vec), i + opt.epoch_count + 1)
 
             torchvision.utils.save_image(result, "images/epoch-" + str(i + opt.epoch_count + 1) + "-loss_g-" + str(
-                round(loss_g.item(), 4)) + "-accuracy-" + str(accuracy) + time.strftime("-%H:%M:%S") + ".jpg",
+                round(loss_g.item(), 4)) + time.strftime("-%H:%M:%S") + ".jpg",
                                          normalize=True, range=(-1, 1))
             # print("epoch:%d | avg_loss_d: %.4f | avg_loss_g: %.4f | accuracy: %.2f\n"
             # % (i + 1, meter_d, meter_g, accuracy))
@@ -197,6 +200,26 @@ def get_net(device):
     if opt.load_generator is not None:
         generator.load(opt.load_generator)
     return discriminator, generator
+
+
+def cal_gradient_penalty(discriminator, device, true_images, fake_images, LAMBDA):
+    """
+
+    :param discriminator:  net D
+    :param device: GPU0
+    :param true_images: real samples
+    :param fake_images: fake samples
+    :return: gradient_penalty
+    """
+    alpha = torch.randn(true_images.size()[0], 1, 1, 1).to(device)
+    interpolates = (alpha * true_images + (1 - alpha) * fake_images).require_grad_(True).to(device)
+    d_interpolates = discriminator(interpolates)
+    grad_outputs = torch.ones(d_interpolates.size()).to(device)
+    gradients = torch.autograd.grad(d_interpolates, interpolates,
+                                    grad_outputs=grad_outputs, create_graph=True,
+                                    retain_graph=True, only_inputs=True)[0]
+    gradients = gradients.view(gradients.size()[0], -1)
+    return ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
 
 
 def cal_fid(illust2vec):
