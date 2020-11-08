@@ -72,7 +72,7 @@ def get_96_size():
 
 
 def make_fake_dir():
-    root = "./resize/fake"
+    root = "./resize/fake2/"
     for i in range(256):
         os.mkdir(root + str(i + 1))
 
@@ -80,4 +80,5 @@ def make_fake_dir():
 if __name__ == '__main__':
     import fire
     fire.Fire()
+
 

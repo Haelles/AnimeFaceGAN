@@ -21,7 +21,7 @@ import i2v
 def train(**kwargs):
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    writer = SummaryWriter('runs/week06_q7')
+    writer = SummaryWriter('runs/week06_q7_2')
     iter_count = opt.iter_count
 
     print("begin to load data\n")
@@ -95,9 +95,9 @@ def train(**kwargs):
                 loss_g.backward()
                 optimizer_g.step()
                 meter_g += float(loss_g)
-                if j % 30 == 0:
-                    writer.add_scalar('mini_loss_g', loss_g.item(), iter_count)  # mini batch loss
-                    writer.add_scalar('mini_loss_d', float(0.5 * loss_d1 + 0.5 * loss_d2), iter_count)
+                if (j + 1) % 30 == 0:
+                    writer.add_scalar('mini_loss_g', loss_g.item(), iter_count + 1)  # mini batch loss
+                    writer.add_scalar('mini_loss_d', temp_loss_d, iter_count + 1)
             cnt += 1  # 1 -> 248
             iter_count += 1  # 1 -> 248iters * 60 epochs
 
@@ -115,16 +115,18 @@ def train(**kwargs):
             generator.train()
 
             # 事先用os.mkdir建好文件夹，后续用CPU并行计算FID
-            root = "resize/fake/" + str(i + 1)
+            root = "resize/fake2/" + str(i + 1)
             for k in range(opt.batch_size):
                 torchvision.utils.save_image(fake_images[k], root + str(k + 1) + ".jpg", normalize=True, range=(-1, 1))
 
-            top_k = pred.topk(opt.generate_num)[1]
+            top_k = pred.topk(opt.generate_num, dim=0)[1]
+            # print(top_k)
             result = []
             for num in top_k:
                 result.append(fake_images[num])
+                # print(fake_images[num].shape)
 
-            accuracy = 0.0
+            # accuracy = 0.0
             # for p in pred.tolist():
             #     if p > 0.5:
             #         accuracy += 1.0
@@ -136,8 +138,9 @@ def train(**kwargs):
 
             # writer.add_scalar('epoch_fid', cal_fid(illust2vec), i + opt.epoch_count + 1)
 
-            torchvision.utils.save_image(result, "images/epoch-" + str(i + opt.epoch_count + 1) + "-loss_g-" + str(
-                round(loss_g.item(), 4)) + time.strftime("-%H:%M:%S") + ".jpg",
+            torchvision.utils.save_image(fake_images[0:64, :, :, :],
+                                         "images/epoch-" + str(i + opt.epoch_count + 1) + "-loss_g-" + str(
+                                             round(loss_g.item(), 4)) + time.strftime("-%H:%M:%S") + ".jpg",
                                          normalize=True, range=(-1, 1))
             # print("epoch:%d | avg_loss_d: %.4f | avg_loss_g: %.4f | accuracy: %.2f\n"
             # % (i + 1, meter_d, meter_g, accuracy))
@@ -212,7 +215,7 @@ def cal_gradient_penalty(discriminator, device, true_images, fake_images, LAMBDA
     :return: gradient_penalty
     """
     alpha = torch.randn(true_images.size()[0], 1, 1, 1).to(device)
-    interpolates = (alpha * true_images + (1 - alpha) * fake_images).require_grad_(True).to(device)
+    interpolates = (alpha * true_images + (1 - alpha) * fake_images).requires_grad_(True).to(device)
     d_interpolates = discriminator(interpolates)
     grad_outputs = torch.ones(d_interpolates.size()).to(device)
     gradients = torch.autograd.grad(d_interpolates, interpolates,
@@ -285,6 +288,7 @@ if __name__ == '__main__':
     import fire
 
     fire.Fire()
+
 
 
 
