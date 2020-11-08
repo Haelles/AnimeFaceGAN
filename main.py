@@ -13,8 +13,6 @@ import PIL
 from PIL import Image, ImageFile
 from tensorboardX import SummaryWriter
 import i2v
-import numba
-from numba import jit
 
 
 # ImageFile.LOAD_TRUNCATED_IMAGES = True

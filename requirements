@@ -1,10 +1,8 @@
 fire
 tqdm
-ipdb
 scipy
 chainer
 illustration2vec
-cupy-cuda80
+'cupy-cuda101>=7.7.0,<8.0.0'
 tensorboard
 tensorboardX
-numba
