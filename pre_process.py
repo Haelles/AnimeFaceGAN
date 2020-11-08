@@ -16,7 +16,7 @@ def get_true_for_cal_fid():
 
 
 def get_broken():
-    root = "../动漫头像/cropped/"
+    root = "../data/cropped/"
     files = os.listdir(root)
     file_list = [
         path for path in files

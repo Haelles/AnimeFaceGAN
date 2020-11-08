@@ -4,3 +4,7 @@ ipdb
 scipy
 chainer
 illustration2vec
+cupy-cuda80
+tensorboard
+tensorboardX
+numba

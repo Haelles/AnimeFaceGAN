@@ -12,6 +12,9 @@ import os
 import PIL
 from PIL import Image, ImageFile
 from tensorboardX import SummaryWriter
+import i2v
+import numba
+from numba import jit
 
 
 # ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -53,6 +56,7 @@ def train(**kwargs):
     discriminator.train()
     generator.train()
 
+    illust2vec = i2v.make_i2v_with_chainer("illust2vec_ver200.caffemodel")
     print("construct net success\nbegin to train\n")
 
     pre_loss_g = 1e4
@@ -110,6 +114,10 @@ def train(**kwargs):
             discriminator.train()
             generator.train()
 
+            root = "resize/fake/"
+            for k in range(opt.batch_size):
+                torchvision.utils.save_image(fake_images[k], root + str(k + 1) + ".jpg", normalize=True, range=(-1, 1))
+
             top_k = pred.topk(opt.generate_num)[1]
             result = []
             for num in top_k:
@@ -125,13 +133,10 @@ def train(**kwargs):
             writer.add_scalar('epoch_loss_d', meter_d, i + opt.epoch_count + 1)
             writer.add_scalar('accuracy', accuracy, i + opt.epoch_count + 1)
 
-            root = "resize/fake/"
-            for k in range(opt.batch_size):
-                torchvision.utils.save_image(fake_images[k], root + str(i + 1) + ".png", normalize=True, range=(-1, 1))
-            writer.add_scalar('iter_fid', cal_fid(), i + opt.epoch_count + 1)
+            writer.add_scalar('epoch_fid', cal_fid(illust2vec), i + opt.epoch_count + 1)
 
             torchvision.utils.save_image(result, "images/epoch-" + str(i + opt.epoch_count + 1) + "-loss_g-" + str(
-                round(loss_g.item(), 4)) + "-accuracy-" + str(accuracy) + time.strftime("-%H:%M:%S") + ".png",
+                round(loss_g.item(), 4)) + "-accuracy-" + str(accuracy) + time.strftime("-%H:%M:%S") + ".jpg",
                                          normalize=True, range=(-1, 1))
             # print("epoch:%d | avg_loss_d: %.4f | avg_loss_g: %.4f | accuracy: %.2f\n"
             # % (i + 1, meter_d, meter_g, accuracy))
@@ -182,7 +187,7 @@ def generate(**kwargs):
             result.append(fake_images[i])
 
         torchvision.utils.save_image(result, "images/test-" + str(round(loss.item(), 4)) + "-accuracy-" + str(
-            round(accuracy / opt.batch_size, 2)) + time.strftime("-%m_%d_%H:%M:%S") + ".png", normalize=True,
+            round(accuracy / opt.batch_size, 2)) + time.strftime("-%m_%d_%H:%M:%S") + ".jpg", normalize=True,
                                      range=(-1, 1))
 
 
@@ -196,30 +201,45 @@ def get_net(device):
     return discriminator, generator
 
 
-def cal_fid():
+def cal_fid(illust2vec):
     """
     与256张真实图片对比，每张图片通过Illustation2vec feature extractor得到一个1*4096向量
     然后计算FID
     :return:fid
     """
     from scipy.linalg import sqrtm
-    import i2v
     import numpy as np
     import os
-
-    illust2vec = i2v.make_i2v_with_chainer("illust2vec_ver200.caffemodel")
 
     # 真实图片的特征向量
     root = "resize/true/"
     paths = os.listdir(root)
-    images_list = [Image.open(root + path) for path in paths]
-    true_vec = illust2vec.extract_feature(images_list)
+    true_list = []
+    for path in paths:
+        if "jpg" in path:
+            true_list.append(Image.open(root + path))
+    res_true = []
+    for i in range(256):
+        result_real = illust2vec.extract_feature([true_list[i]])
+        res_true.append(result_real)
+        # print(str(i))
+    true_vec = np.concatenate(tuple(res_true), axis=0)
+    print("true_vec_done")
 
     # 计算生成图片的特征向量
     root = "resize/fake/"
+    fake_list = []
     paths = os.listdir(root)
-    images_list = [Image.open(root + path) for path in paths]
-    fake_vec = illust2vec.extract_feature(images_list)
+    for path in paths:
+        if "jpg" in path:
+            fake_list.append(Image.open(root + path))
+    res_fake = []
+    for j in range(256):
+        result_fake = illust2vec.extract_feature([fake_list[j]])
+        res_fake.append(result_fake)
+        # print(str(j))
+    fake_vec = np.concatenate(tuple(res_fake), axis=0)
+    print("fake_vec_done")
     # 清空文件夹，下次继续使用
     for path in paths:
         os.remove(root + path)
@@ -230,19 +250,21 @@ def cal_fid():
     mu2 = fake_vec.mean(axis=0)
     sigma2 = np.cov(fake_vec, rowvar=False)
     # calculate sum squared difference between means
-	sum_squared_diff = np.sum((mu1 - mu2)**2.0)
+    sum_squared_diff = np.sum((mu1 - mu2) ** 2.0)
     # calculate sqrt of product between cov
-	covmean = sqrtm(sigma1.dot(sigma2))
+    covmean = sqrtm(sigma1.dot(sigma2))
     # check and correct imaginary numbers from sqrt
-	if np.iscomplexobj(covmean):
+    if np.iscomplexobj(covmean):
         covmean = covmean.real
     # calculate score
-	return sum_squared_diff + np.trace(sigma1 + sigma2 - 2.0 * covmean)
+    return sum_squared_diff + np.trace(sigma1 + sigma2 - 2.0 * covmean)
 
 
 if __name__ == '__main__':
     import fire
+
     fire.Fire()
+
 
 
 
