@@ -19,9 +19,10 @@ import i2v
 
 
 def train(**kwargs):
+    f = open('lr.txt', 'a')
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    writer = SummaryWriter('runs/week06_q7_2')
+    writer = SummaryWriter('runs/week06_q7_3')
     iter_count = opt.iter_count
 
     print("begin to load data\n")
@@ -55,7 +56,6 @@ def train(**kwargs):
     discriminator.train()
     generator.train()
 
-    # illust2vec = i2v.make_i2v_with_chainer("illust2vec_ver200.caffemodel")
     print("construct net success\nbegin to train\n")
 
     pre_loss_g = 1e4
@@ -118,7 +118,7 @@ def train(**kwargs):
             generator.train()
 
             # 事先用os.mkdir建好文件夹，后续用CPU并行计算FID
-            root = "resize/fake2/" + str(i + 1)
+            root = "resize/fake3/" + str(i + opt.epoch_count + 1) + "/"
             for k in range(opt.batch_size):
                 torchvision.utils.save_image(fake_images[k], root + str(k + 1) + ".jpg", normalize=True, range=(-1, 1))
 
@@ -155,6 +155,7 @@ def train(**kwargs):
         if abs(meter_d) > abs(pre_loss_d):
             lr1 *= opt.lr_decay
             print("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
+            f.write("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
             for param_group in optimizer_d.param_groups:
                 param_group['lr'] = lr1
         pre_loss_d = meter_d
@@ -162,9 +163,12 @@ def train(**kwargs):
         if abs(meter_g) > abs(pre_loss_g):
             lr2 *= opt.lr_decay
             print("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
+            f.write("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
             for param_group in optimizer_g.param_groups:
                 param_group['lr'] = lr2
         pre_loss_g = meter_g
+
+    f.close()
 
 
 def generate(**kwargs):
@@ -228,9 +232,9 @@ def cal_gradient_penalty(discriminator, device, true_images, fake_images, LAMBDA
     return ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
 
 
-def cal_fid(illust2vec):
+def cal_fid():
     """
-    与256张真实图片对比，每张图片通过Illustation2vec feature extractor得到一个1*4096向量
+    与真实图片对比，每张图片通过Illustation2vec feature extractor得到一个1*4096向量
     然后计算FID
     :return:fid
     """
@@ -238,6 +242,8 @@ def cal_fid(illust2vec):
     import numpy as np
     import os
 
+    writer = SummaryWriter('runs/week06_q7_3')
+    illust2vec = i2v.make_i2v_with_chainer("illust2vec_ver200.caffemodel")
     # 真实图片的特征向量
     root = "resize/true/"
     paths = os.listdir(root)
@@ -246,50 +252,46 @@ def cal_fid(illust2vec):
         if "jpg" in path:
             true_list.append(Image.open(root + path))
     res_true = []
-    for i in range(256):
+    for i in range(opt.batch_size):
         result_real = illust2vec.extract_feature([true_list[i]])
         res_true.append(result_real)
         # print(str(i))
     true_vec = np.concatenate(tuple(res_true), axis=0)
+    mu1 = true_vec.mean(axis=0)
+    sigma1 = np.cov(true_vec, rowvar=False)
     print("true_vec_done")
 
     # 计算生成图片的特征向量
-    root = "resize/fake/"
-    fake_list = []
-    paths = os.listdir(root)
-    for path in paths:
-        if "jpg" in path:
-            fake_list.append(Image.open(root + path))
-    res_fake = []
-    for j in range(256):
-        result_fake = illust2vec.extract_feature([fake_list[j]])
-        res_fake.append(result_fake)
-        # print(str(j))
-    fake_vec = np.concatenate(tuple(res_fake), axis=0)
-    print("fake_vec_done")
-    # 清空文件夹，下次继续使用
-    for path in paths:
-        os.remove(root + path)
+    for i in range(opt.epoch):
+        root = "resize/fake3/" + str(i + 1 + opt.epoch_count) + "/"
+        fake_list = []
+        paths = os.listdir(root)
+        for path in paths:
+            if "jpg" in path:
+                fake_list.append(Image.open(root + path))
+        res_fake = []
+        for j in range(opt.batch_size):
+            result_fake = illust2vec.extract_feature([fake_list[j]])
+            res_fake.append(result_fake)
+            # print(str(j))
+        fake_vec = np.concatenate(tuple(res_fake), axis=0)
 
-    # 计算FID
-    mu1 = true_vec.mean(axis=0)
-    sigma1 = np.cov(true_vec, rowvar=False)
-    mu2 = fake_vec.mean(axis=0)
-    sigma2 = np.cov(fake_vec, rowvar=False)
-    # calculate sum squared difference between means
-    sum_squared_diff = np.sum((mu1 - mu2) ** 2.0)
-    # calculate sqrt of product between cov
-    covmean = sqrtm(sigma1.dot(sigma2))
-    # check and correct imaginary numbers from sqrt
-    if np.iscomplexobj(covmean):
-        covmean = covmean.real
-    # calculate score
-    return sum_squared_diff + np.trace(sigma1 + sigma2 - 2.0 * covmean)
+        mu2 = fake_vec.mean(axis=0)
+        sigma2 = np.cov(fake_vec, rowvar=False)
+        # calculate sum squared difference between means
+        sum_squared_diff = np.sum((mu1 - mu2) ** 2.0)
+        # calculate sqrt of product between cov
+        covmean = sqrtm(sigma1.dot(sigma2))
+        # check and correct imaginary numbers from sqrt
+        if np.iscomplexobj(covmean):
+            covmean = covmean.real
+        # calculate score
+        writer.add_scalar('epoch_fid', sum_squared_diff + np.trace(sigma1 + sigma2 - 2.0 * covmean),
+                          i + opt.epoch_count + 1)
+        print("epoch_done: " + str(i + opt.epoch_count + 1))
 
 
 if __name__ == '__main__':
     import fire
-
     fire.Fire()
-
 

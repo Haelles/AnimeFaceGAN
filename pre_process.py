@@ -4,6 +4,7 @@ import PIL
 import random
 from PIL import Image
 from shutil import copyfile
+from Config import opt
 
 
 def get_true_for_cal_fid():
@@ -11,7 +12,7 @@ def get_true_for_cal_fid():
     target = "./resize/true/"
     files = os.listdir(source)
     seed = random.randint(1, 100)
-    for i in range(256):
+    for i in range(opt.batch_size):
         copyfile(source + files[seed * (i + 1)], target + str(i + 1) + ".jpg")
 
 
@@ -72,7 +73,7 @@ def get_96_size():
 
 
 def make_fake_dir():
-    root = "./resize/fake2/"
+    root = "./resize/fake3/"
     for i in range(256):
         os.mkdir(root + str(i + 1))
 
@@ -80,5 +81,4 @@ def make_fake_dir():
 if __name__ == '__main__':
     import fire
     fire.Fire()
-
 

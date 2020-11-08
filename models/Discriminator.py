@@ -11,15 +11,15 @@ class Discriminator(BasicModule):
             nn.LeakyReLU(0.2, inplace=True),
 
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            # nn.BatchNorm2d(ndf * 2),
+            nn.LayerNorm([ndf * 2, 16, 16]),
             nn.LeakyReLU(0.2, inplace=True),
 
             nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-            # nn.BatchNorm2d(ndf * 4),
+            nn.LayerNorm([ndf * 4, 8, 8]),
             nn.LeakyReLU(0.2, inplace=True),
 
             nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-            # nn.BatchNorm2d(ndf * 8),
+            nn.LayerNorm([ndf * 8, 4, 4]),
             nn.LeakyReLU(0.2, inplace=True),
 
             # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
