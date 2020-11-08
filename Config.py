@@ -15,11 +15,11 @@ class Config:
         self.load_discriminator = None
 
         # training
-        self.batch_size = 256
+        self.batch_size = 64
         self.epoch = 40
         self.num_workers = 4
-        self.lr1 = 4e-5
-        self.lr2 = 4e-5
+        self.lr1 = 4e-4
+        self.lr2 = 1e-4
         self.beta1 = 0.5  # Adam优化器的beta1参数
         self.LAMBDA = 10  # 文献提供的超参数
         self.lr_decay = 0.95
@@ -40,4 +40,5 @@ def _parse(self, kwargs):  # **kwargs
 
 Config._parse = _parse
 opt = Config()
+
 

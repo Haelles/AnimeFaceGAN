@@ -64,7 +64,8 @@ def train(**kwargs):
     for i in range(opt.epoch):
         meter_d = 0.0
         meter_g = 0.0
-        cnt = 0
+        cnt1 = 0
+        cnt2 = 0
 
         for j, (true_images, _) in tqdm.tqdm(enumerate(true_data_loader)):
             true_images = true_images.to(device)
@@ -95,15 +96,17 @@ def train(**kwargs):
                 loss_g.backward()
                 optimizer_g.step()
                 meter_g += float(loss_g)
+                cnt2 += 1
                 if (j + 1) % 30 == 0:
                     writer.add_scalar('mini_loss_g', loss_g.item(), iter_count + 1)  # mini batch loss
                     writer.add_scalar('mini_loss_d', temp_loss_d, iter_count + 1)
-            cnt += 1  # 1 -> 248
+
+            cnt1 += 1  # 1 -> 248
             iter_count += 1  # 1 -> 248iters * 60 epochs
 
         # record epoch loss
-        meter_g /= cnt
-        meter_d /= cnt
+        meter_g /= cnt2
+        meter_d /= cnt1
         with torch.no_grad():
             discriminator.eval()
             generator.eval()
@@ -119,12 +122,12 @@ def train(**kwargs):
             for k in range(opt.batch_size):
                 torchvision.utils.save_image(fake_images[k], root + str(k + 1) + ".jpg", normalize=True, range=(-1, 1))
 
-            top_k = pred.topk(opt.generate_num, dim=0)[1]
+            # top_k = pred.topk(opt.generate_num, dim=0)[1]
             # print(top_k)
-            result = []
-            for num in top_k:
-                result.append(fake_images[num])
-                # print(fake_images[num].shape)
+            # result = []
+            # for num in top_k:
+            #    result.append(fake_images[num])
+            # print(fake_images[num].shape)
 
             # accuracy = 0.0
             # for p in pred.tolist():
@@ -149,14 +152,14 @@ def train(**kwargs):
             discriminator.save()
             generator.save()
 
-        if meter_d > pre_loss_d:
+        if abs(meter_d) > abs(pre_loss_d):
             lr1 *= opt.lr_decay
             print("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
             for param_group in optimizer_d.param_groups:
                 param_group['lr'] = lr1
         pre_loss_d = meter_d
 
-        if meter_g > pre_loss_g:
+        if abs(meter_g) > abs(pre_loss_g):
             lr2 *= opt.lr_decay
             print("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
             for param_group in optimizer_g.param_groups:
@@ -288,8 +291,5 @@ if __name__ == '__main__':
     import fire
 
     fire.Fire()
-
-
-
 
 
