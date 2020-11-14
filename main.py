@@ -13,7 +13,9 @@ import PIL
 from PIL import Image, ImageFile
 from tensorboardX import SummaryWriter
 import i2v
-
+from scipy.linalg import sqrtm
+import numpy as np
+import os
 
 # ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -182,24 +184,11 @@ def generate(**kwargs):
     with torch.no_grad():
         fake_images = generator(noises)
         pred = discriminator(fake_images)
-        top_k = pred.topk(opt.generate_num)[1]
-        result = []
 
-        true_labels = torch.ones(opt.batch_size).to(device)
-        cal_loss = nn.BCELoss().to(device)
-        loss = cal_loss(pred, true_labels)
-
-        accuracy = 0.0
-        for p in pred.tolist():
-            if p > 0.5:
-                accuracy += 1.0
-
-        for i in top_k:
-            result.append(fake_images[i])
-
-        torchvision.utils.save_image(result, "images/test-" + str(round(loss.item(), 4)) + "-accuracy-" + str(
-            round(accuracy / opt.batch_size, 2)) + time.strftime("-%m_%d_%H:%M:%S") + ".jpg", normalize=True,
-                                     range=(-1, 1))
+        root = "resize/modify2/"
+        for i in range(4):
+            for k in range(opt.batch_size):
+                torchvision.utils.save_image(fake_images[k], root + str(k + 1 + 64 * i) + ".jpg", normalize=True, range=(-1, 1))
 
 
 def get_net(device):
@@ -238,11 +227,7 @@ def cal_fid():
     然后计算FID
     :return:fid
     """
-    from scipy.linalg import sqrtm
-    import numpy as np
-    import os
 
-    writer = SummaryWriter('runs/week06_q7_3')
     illust2vec = i2v.make_i2v_with_chainer("illust2vec_ver200.caffemodel")
     # 真实图片的特征向量
     root = "resize/true/"
@@ -261,34 +246,37 @@ def cal_fid():
     sigma1 = np.cov(true_vec, rowvar=False)
     print("true_vec_done")
 
-    # 计算生成图片的特征向量
-    for i in range(opt.epoch):
-        root = "resize/fake3/" + str(i + 1 + opt.epoch_count) + "/"
-        fake_list = []
-        paths = os.listdir(root)
-        for path in paths:
-            if "jpg" in path:
-                fake_list.append(Image.open(root + path))
-        res_fake = []
-        for j in range(opt.batch_size):
-            result_fake = illust2vec.extract_feature([fake_list[j]])
-            res_fake.append(result_fake)
-            # print(str(j))
-        fake_vec = np.concatenate(tuple(res_fake), axis=0)
+    fid1 = temp_cal("resize/fake/", 256, mu1, sigma1)
+    print("fid1:" + str(fid1))
+    fid2 = temp_cal("resize/fake2/40/", 64, mu1, sigma1)
+    print("fid2:" + str(fid2))
+    fid3 = temp_cal("resize/fake3/40/", 64, mu1, sigma1)
+    print("fid2:" + str(fid3))
 
-        mu2 = fake_vec.mean(axis=0)
-        sigma2 = np.cov(fake_vec, rowvar=False)
-        # calculate sum squared difference between means
-        sum_squared_diff = np.sum((mu1 - mu2) ** 2.0)
-        # calculate sqrt of product between cov
-        covmean = sqrtm(sigma1.dot(sigma2))
-        # check and correct imaginary numbers from sqrt
-        if np.iscomplexobj(covmean):
-            covmean = covmean.real
-        # calculate score
-        writer.add_scalar('epoch_fid', sum_squared_diff + np.trace(sigma1 + sigma2 - 2.0 * covmean),
-                          i + opt.epoch_count + 1)
-        print("epoch_done: " + str(i + opt.epoch_count + 1))
+
+def temp_cal(root, illust2vec, size, mu1, sigma1):
+    fake_list = []
+    paths = os.listdir(root)
+    for path in paths:
+        if "jpg" in path:
+            fake_list.append(Image.open(root + path))
+    res_fake = []
+    for j in range(size):
+        result_fake = illust2vec.extract_feature([fake_list[j]])
+        res_fake.append(result_fake)
+        # print(str(j))
+    fake_vec = np.concatenate(tuple(res_fake), axis=0)
+    mu2 = fake_vec.mean(axis=0)
+    sigma2 = np.cov(fake_vec, rowvar=False)
+    # calculate sum squared difference between means
+    sum_squared_diff = np.sum((mu1 - mu2) ** 2.0)
+    # calculate sqrt of product between cov
+    covmean = sqrtm(sigma1.dot(sigma2))
+    # check and correct imaginary numbers from sqrt
+    if np.iscomplexobj(covmean):
+        covmean = covmean.real
+    # calculate score
+    return sum_squared_diff + np.trace(sigma1 + sigma2 - 2.0 * covmean)
 
 
 if __name__ == '__main__':

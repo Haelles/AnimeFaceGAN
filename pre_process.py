@@ -12,8 +12,9 @@ def get_true_for_cal_fid():
     target = "./resize/true/"
     files = os.listdir(source)
     seed = random.randint(1, 100)
-    for i in range(opt.batch_size):
-        copyfile(source + files[seed * (i + 1)], target + str(i + 1) + ".jpg")
+    for i in range(256):
+        img = cv2.resize(cv2.imread(source + files[seed * (i + 1)]), (96, 96), interpolation=cv2.INTER_AREA)
+        cv2.imwrite(target + str(i + 1) + ".jpg", img)
 
 
 def get_broken():
