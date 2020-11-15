@@ -24,7 +24,7 @@ from models.model_new import weights_init
 def train(**kwargs):
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    writer = SummaryWriter('runs/week07_01/')
+    writer = SummaryWriter('runs/week07_02/')
     iter_count = opt.iter_count
 
     print("begin to load data\n")
@@ -52,6 +52,7 @@ def train(**kwargs):
     optimizer_g = optim.Adam(generator.parameters(), lr=lr2, betas=(opt.beta1, 0.999))
 
     cal = nn.BCELoss().to(device)
+    cal_mse = nn.MSELoss().to(device)
 
     discriminator.train()
     generator.train()
@@ -71,8 +72,8 @@ def train(**kwargs):
             loss_d1.backward()
 
             noises.copy_(torch.randn(opt.batch_size, opt.noise_dimension, 1, 1))
-            fake_images = generator(noises.detach())
-            res = discriminator(fake_images)
+            fake_images, z_pred = generator(noises)
+            res = discriminator(fake_images.detach())
             loss_d2 = cal(res, fake_labels)
             loss_d2.backward()
 
@@ -81,10 +82,11 @@ def train(**kwargs):
             optimizer_d.step()
 
             optimizer_g.zero_grad()
-            fake_images = generator(noises)
             pred = discriminator(fake_images)
             loss_g = cal(pred, true_labels)
-            loss_g.backward()
+            loss_g.backward(retain_graph=True)
+            loss_z = cal_mse(noises.flatten(start_dim=1), z_pred)
+            loss_z.backward()
             optimizer_g.step()
             meter_g += float(loss_g)
             if (j + 1) % 30 == 0:
@@ -101,7 +103,7 @@ def train(**kwargs):
             discriminator.eval()
             generator.eval()
             noises.copy_(torch.randn(opt.batch_size, opt.noise_dimension, 1, 1))
-            fake_images = generator(noises)
+            fake_images, z_pred = generator(noises)
             pred = discriminator(fake_images)
             loss_g = cal(pred, fake_labels)
             discriminator.train()
@@ -134,8 +136,8 @@ def train(**kwargs):
             # % (i + 1, meter_d, meter_g, accuracy))
 
         if (i + 1) % 10 == 0:
-            discriminator.save_with_label("method01")
-            generator.save_with_label("method01")
+            discriminator.save_with_label("method02")
+            generator.save_with_label("method02")
 
 
 def generate(**kwargs):
@@ -147,16 +149,16 @@ def generate(**kwargs):
     generator.eval()
 
     with torch.no_grad():
-        fake_images = generator(noises)
-        root = "resize/week07_01/"
+        fake_images, z_pred = generator(noises)
+        root = "resize/week07/21/"
         for i in range(4):
             for k in range(opt.batch_size):
                 torchvision.utils.save_image(fake_images[k], root + str(k + 1 + 64 * i) + ".jpg", normalize=True, range=(-1, 1))
 
 
 def get_net(device):
-    discriminator = getattr(models, 'net_D1')(opt).to(device)
-    generator = getattr(models, 'net_G1')(opt).to(device)
+    discriminator = getattr(models, 'net_D2')(opt).to(device)
+    generator = getattr(models, 'net_G2')(opt).to(device)
     discriminator.apply(weights_init)  # 尝试
     generator.apply(weights_init)
     if opt.load_discriminator is not None:
