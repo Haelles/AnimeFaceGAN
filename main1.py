@@ -22,8 +22,8 @@ from models.model_new import weights_init
 
 
 def train(**kwargs):
-    # f = open('lr.txt', 'a')
-    # f.write("a new training-week07-1")
+    f = open('lr.txt', 'a')
+    f.write("a new training-week07-1")
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     writer = SummaryWriter('runs/week07_01/')
@@ -60,8 +60,8 @@ def train(**kwargs):
 
     print("construct net success\nbegin to train\n")
 
-    # pre_loss_g = 1e4
-    # pre_loss_d = 1e4
+    pre_loss_g = 1e4
+    pre_loss_d = 1e4
 
     for i in range(opt.epoch):
         meter_d = 0.0
@@ -141,23 +141,23 @@ def train(**kwargs):
             discriminator.save()
             generator.save()
 
-        # if abs(meter_d) > abs(pre_loss_d):
-        #     lr1 *= opt.lr_decay
-        #     print("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
-        #     f.write("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
-        #     for param_group in optimizer_d.param_groups:
-        #         param_group['lr'] = lr1
-        # pre_loss_d = meter_d
-        #
-        # if abs(meter_g) > abs(pre_loss_g):
-        #     lr2 *= opt.lr_decay
-        #     print("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
-        #     f.write("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
-        #     for param_group in optimizer_g.param_groups:
-        #         param_group['lr'] = lr2
-        # pre_loss_g = meter_g
+        if meter_d > pre_loss_d:
+            lr1 *= opt.lr_decay
+            print("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
+            f.write("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
+            for param_group in optimizer_d.param_groups:
+                param_group['lr'] = lr1
+        pre_loss_d = meter_d
 
-    # f.close()
+        if meter_g > pre_loss_g:
+            lr2 *= opt.lr_decay
+            print("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
+            f.write("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
+            for param_group in optimizer_g.param_groups:
+                param_group['lr'] = lr2
+        pre_loss_g = meter_g
+
+    f.close()
 
 
 def generate(**kwargs):
