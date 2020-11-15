@@ -88,8 +88,8 @@ def train(**kwargs):
             optimizer_g.step()
             meter_g += float(loss_g)
             if (j + 1) % 30 == 0:
-                writer.add_scalar('mini_loss_g', loss_g.item(), iter_count + 1)  # mini batch loss
-                writer.add_scalar('mini_loss_d', temp_loss_d, iter_count + 1)
+                writer.add_scalar('mini_loss_g_1', loss_g.item(), iter_count + 1)  # mini batch loss
+                writer.add_scalar('mini_loss_d_1', temp_loss_d, iter_count + 1)
 
             cnt += 1  # 1 -> 248
             iter_count += 1  # 1 -> 248iters * 60 epochs
@@ -120,8 +120,8 @@ def train(**kwargs):
             #         accuracy += 1.0
             # accuracy = round(accuracy / opt.batch_size, 2)
 
-            writer.add_scalar('epoch_loss_g', meter_g, i + opt.epoch_count + 1)
-            writer.add_scalar('epoch_loss_d', meter_d, i + opt.epoch_count + 1)
+            writer.add_scalar('epoch_loss_g_1', meter_g, i + opt.epoch_count + 1)
+            writer.add_scalar('epoch_loss_d_1', meter_d, i + opt.epoch_count + 1)
             # writer.add_scalar('accuracy', accuracy, i + opt.epoch_count + 1)
 
             # writer.add_scalar('epoch_fid', cal_fid(illust2vec), i + opt.epoch_count + 1)
@@ -169,4 +169,5 @@ def get_net(device):
 if __name__ == '__main__':
     import fire
     fire.Fire()
+
 
