@@ -37,7 +37,7 @@ for i in range(start, end + 1):
     html = requests.get(url).text
     soup = BeautifulSoup(html, 'html.parser')
     for img in soup.find_all('img', class_="preview"):
-        target_url = 'http:' + img['src']
+        target_url = img['src']
         filename = os.path.join('imgs', target_url.split('/')[-1])
         download(target_url, filename)
     print('%d / %d' % (i, end))

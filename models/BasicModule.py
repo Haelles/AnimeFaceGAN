@@ -15,3 +15,8 @@ class BasicModule(torch.nn.Module, ABC):
         path = "checkpoints/" + self.name + "-"
         cur_time = time.strftime("%m_%d_%H:%M:%S") + ".pth"
         torch.save(self.state_dict(), path + cur_time)
+
+    def save_with_label(self, label):
+        path = "checkpoints/" + self.name + "-" + label + '-'
+        cur_time = time.strftime("%m_%d_%H:%M:%S") + ".pth"
+        torch.save(self.state_dict(), path + cur_time)

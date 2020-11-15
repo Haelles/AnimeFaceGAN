@@ -18,8 +18,8 @@ class Config:
         self.batch_size = 64
         self.epoch = 40
         self.num_workers = 4
-        self.lr1 = 6e-4
-        self.lr2 = 1e-4
+        self.lr1 = 0.002
+        self.lr2 = 0.002
         self.beta1 = 0.5  # Adam优化器的beta1参数
         self.LAMBDA = 10  # 文献提供的超参数
         self.lr_decay = 0.95
