@@ -1,5 +1,7 @@
 from .BasicModule import BasicModule
 from torch import nn
+import torch
+
 
 
 def weights_init(m):
@@ -36,7 +38,7 @@ class net_D1(BasicModule):
         )
 
     def forward(self, input_data):
-        return self.main(input_data).view(-1, 1)
+        return self.main(input_data).flatten()
 
 
 class net_G1(BasicModule):

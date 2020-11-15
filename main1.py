@@ -22,8 +22,6 @@ from models.model_new import weights_init
 
 
 def train(**kwargs):
-    f = open('lr.txt', 'a')
-    f.write("a new training-week07-1")
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     writer = SummaryWriter('runs/week07_01/')
@@ -32,7 +30,7 @@ def train(**kwargs):
     print("begin to load data\n")
     transform = transforms.Compose([
         transforms.Resize(opt.image_size),
-        # transforms.CenterCrop(opt.image_size),
+        transforms.CenterCrop(opt.image_size),
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
@@ -60,9 +58,6 @@ def train(**kwargs):
 
     print("construct net success\nbegin to train\n")
 
-    pre_loss_g = 1e4
-    pre_loss_d = 1e4
-
     for i in range(opt.epoch):
         meter_d = 0.0
         meter_g = 0.0
@@ -78,16 +73,17 @@ def train(**kwargs):
             noises.copy_(torch.randn(opt.batch_size, opt.noise_dimension, 1, 1))
             fake_images = generator(noises.detach())
             res = discriminator(fake_images)
-            loss_d2 = res.mean()
+            loss_d2 = cal(res, fake_labels)
             loss_d2.backward()
 
             temp_loss_d = loss_d1 + loss_d2
             meter_d += float(temp_loss_d)
+            optimizer_d.step()
 
             optimizer_g.zero_grad()
             fake_images = generator(noises)
             pred = discriminator(fake_images)
-            loss_g = cal(pred, fake_labels)
+            loss_g = cal(pred, true_labels)
             loss_g.backward()
             optimizer_g.step()
             meter_g += float(loss_g)
@@ -138,26 +134,8 @@ def train(**kwargs):
             # % (i + 1, meter_d, meter_g, accuracy))
 
         if (i + 1) % 10 == 0:
-            discriminator.save()
-            generator.save()
-
-        if meter_d > pre_loss_d:
-            lr1 *= opt.lr_decay
-            print("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
-            f.write("epoch:%d | new lr1: %.15f\n" % (i + opt.epoch_count + 1, lr1))
-            for param_group in optimizer_d.param_groups:
-                param_group['lr'] = lr1
-        pre_loss_d = meter_d
-
-        if meter_g > pre_loss_g:
-            lr2 *= opt.lr_decay
-            print("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
-            f.write("epoch:%d | new lr2: %.15f\n" % (i + opt.epoch_count + 1, lr2))
-            for param_group in optimizer_g.param_groups:
-                param_group['lr'] = lr2
-        pre_loss_g = meter_g
-
-    f.close()
+            discriminator.save_with_label("method01")
+            generator.save_with_label("method01")
 
 
 def generate(**kwargs):
