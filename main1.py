@@ -24,7 +24,7 @@ from models.model_new import weights_init
 def train(**kwargs):
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    writer = SummaryWriter('runs/week07_02/')
+    writer = SummaryWriter('runs/week08_01/')
     iter_count = opt.iter_count
 
     print("begin to load data\n")
@@ -150,7 +150,9 @@ def generate(**kwargs):
 
     with torch.no_grad():
         fake_images, z_pred = generator(noises)
-        root = "resize/week07/21/"
+        root = "resize/week08/12/"
+        if not os.path.exists(root):
+            os.mkdir(root)
         for i in range(4):
             for k in range(opt.batch_size):
                 torchvision.utils.save_image(fake_images[k], root + str(k + 1 + 64 * i) + ".jpg", normalize=True, range=(-1, 1))

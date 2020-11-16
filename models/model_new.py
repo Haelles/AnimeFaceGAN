@@ -119,35 +119,35 @@ class net_G2(BasicModule):
         ngf = opt.generator_feature_maps
         self.fcs = nn.Sequential(
             nn.Linear(100, 1024),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout(0.5),
             nn.Linear(1024, 1024),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout(0.5),
         )
 
         self.decode_fcs = nn.Sequential(
             nn.Linear(1024, 1024),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout(0.5),
             nn.Linear(1024, 100)
         )
         self.main = nn.Sequential(
             nn.ConvTranspose2d(1024, ngf * 8, 4, 1, 0, bias=False),
             nn.BatchNorm2d(ngf * 8),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
 
             nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf * 4),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
 
             nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf * 2),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
 
             nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
 
             nn.ConvTranspose2d(ngf, 3, 5, 3, 1, bias=False),
             nn.Tanh()
