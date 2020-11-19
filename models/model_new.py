@@ -75,6 +75,44 @@ class net_G1(BasicModule):
         return self.main(input_data)
 
 
+class net_G3(BasicModule):
+    def __init__(self, opt):
+        super(net_G3, self).__init__()
+        ngf = opt.generator_feature_maps
+        self.main = nn.Sequential(
+            nn.ConvTranspose2d(opt.noise_dimension, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            # 原作者设置default=1,为方便直接加到这里
+            nn.Conv2d(ngf, ngf, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 尝试再加一层有什么效果
+            nn.Conv2d(ngf, ngf, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.ConvTranspose2d(ngf, 3, 5, 3, 1, bias=False),
+            nn.Tanh()
+        )
+
+    def forward(self, input_data):
+        return self.main(input_data)
+
+
 class net_D2(BasicModule):
     def __init__(self, opt):
         super(net_D2, self).__init__()

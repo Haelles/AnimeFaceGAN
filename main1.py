@@ -38,7 +38,7 @@ def train(**kwargs):
     true_data_loader = DataLoader(true_dataset, opt.batch_size, num_workers=opt.num_workers, drop_last=True,
                                   shuffle=True)
     true_labels = torch.ones(opt.batch_size).to(device)
-    # one_sided_label_smoothing = torch.ones(opt.batch_size).fill_(0.9).to(device)
+    one_sided_label_smoothing = torch.ones(opt.batch_size).fill_(0.9).to(device)
     fake_labels = torch.zeros(opt.batch_size).to(device)
     noises = torch.randn(opt.batch_size, opt.noise_dimension, 1, 1).to(device)
     # fix_noises = torch.randn(opt.batch_size, opt.noise_dimension, 1, 1).to(device)  # 固定值，用于save/generate
@@ -68,11 +68,11 @@ def train(**kwargs):
             true_images = true_images.to(device)
             optimizer_d.zero_grad()
             res = discriminator(true_images)
-            loss_d1 = cal(res, true_labels)
+            loss_d1 = cal(res, one_sided_label_smoothing)
             loss_d1.backward()
 
             noises.copy_(torch.randn(opt.batch_size, opt.noise_dimension, 1, 1))
-            fake_images, z_pred = generator(noises)
+            fake_images = generator(noises)
             res = discriminator(fake_images.detach())
             loss_d2 = cal(res, fake_labels)
             loss_d2.backward()
@@ -84,14 +84,12 @@ def train(**kwargs):
             optimizer_g.zero_grad()
             pred = discriminator(fake_images)
             loss_g = cal(pred, true_labels)
-            loss_g.backward(retain_graph=True)
-            loss_z = cal_mse(noises.flatten(start_dim=1), z_pred)
-            loss_z.backward()
+            loss_g.backward()
             optimizer_g.step()
             meter_g += float(loss_g)
             if (j + 1) % 30 == 0:
-                writer.add_scalar('mini_loss_g_1', loss_g.item(), iter_count + 1)  # mini batch loss
-                writer.add_scalar('mini_loss_d_1', temp_loss_d, iter_count + 1)
+                writer.add_scalar('mini_loss_g', loss_g.item(), iter_count + 1)  # mini batch loss
+                writer.add_scalar('mini_loss_d', temp_loss_d, iter_count + 1)
 
             cnt += 1  # 1 -> 248
             iter_count += 1  # 1 -> 248iters * 60 epochs
@@ -103,7 +101,7 @@ def train(**kwargs):
             discriminator.eval()
             generator.eval()
             noises.copy_(torch.randn(opt.batch_size, opt.noise_dimension, 1, 1))
-            fake_images, z_pred = generator(noises)
+            fake_images = generator(noises)
             pred = discriminator(fake_images)
             loss_g = cal(pred, fake_labels)
             discriminator.train()
@@ -122,8 +120,8 @@ def train(**kwargs):
             #         accuracy += 1.0
             # accuracy = round(accuracy / opt.batch_size, 2)
 
-            writer.add_scalar('epoch_loss_g_1', meter_g, i + opt.epoch_count + 1)
-            writer.add_scalar('epoch_loss_d_1', meter_d, i + opt.epoch_count + 1)
+            writer.add_scalar('epoch_loss_g', meter_g, i + opt.epoch_count + 1)
+            writer.add_scalar('epoch_loss_d', meter_d, i + opt.epoch_count + 1)
             # writer.add_scalar('accuracy', accuracy, i + opt.epoch_count + 1)
 
             # writer.add_scalar('epoch_fid', cal_fid(illust2vec), i + opt.epoch_count + 1)
@@ -136,31 +134,31 @@ def train(**kwargs):
             # % (i + 1, meter_d, meter_g, accuracy))
 
         if (i + 1) % 10 == 0:
-            discriminator.save_with_label("method02")
-            generator.save_with_label("method02")
+            discriminator.save_with_label("method03")
+            generator.save_with_label("method03")
 
 
 def generate(**kwargs):
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    noises = torch.randn(opt.batch_size, opt.noise_dimension, 1, 1).to(device)
     discriminator, generator = get_net(device)
     discriminator.eval()
     generator.eval()
 
     with torch.no_grad():
-        fake_images, z_pred = generator(noises)
-        root = "resize/week08/12/"
+        root = "resize/week08/method03/"
         if not os.path.exists(root):
             os.mkdir(root)
         for i in range(4):
+            noises = torch.randn(opt.batch_size, opt.noise_dimension, 1, 1).to(device)
+            fake_images = generator(noises)
             for k in range(opt.batch_size):
                 torchvision.utils.save_image(fake_images[k], root + str(k + 1 + 64 * i) + ".jpg", normalize=True, range=(-1, 1))
 
 
 def get_net(device):
-    discriminator = getattr(models, 'net_D2')(opt).to(device)
-    generator = getattr(models, 'net_G2')(opt).to(device)
+    discriminator = getattr(models, 'net_D1')(opt).to(device)
+    generator = getattr(models, 'net_G3')(opt).to(device)
     discriminator.apply(weights_init)  # 尝试
     generator.apply(weights_init)
     if opt.load_discriminator is not None:
