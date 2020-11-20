@@ -140,24 +140,24 @@ def train(**kwargs):
 def generate(**kwargs):
     opt._parse(kwargs)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    fake_labels = torch.zeros(opt.batch_size).to(device)
+    true_labels = torch.ones(opt.batch_size).to(device)
     cal = nn.BCELoss().to(device)
     discriminator, generator = get_net(device)
     discriminator.eval()
     generator.eval()
 
     with torch.no_grad():
-        root = "resize/week08/method01_1/"
+        root = "resize/week08/method01_2/"
         if not os.path.exists(root):
             os.mkdir(root)
         for i in range(4):
             noises = torch.randn(opt.batch_size, opt.noise_dimension, 1, 1).to(device)
             fake_images = generator(noises)
             pred = discriminator(fake_images)
-            loss_g = cal(pred, fake_labels)
+            loss_g = cal(pred, true_labels)
             torchvision.utils.save_image(fake_images[0:64, :, :, :],
-                                         "images/W8_01-" + str(i + 1) + "-loss_g-" + str(
-                                             round(loss_g.item(), 4)) + time.strftime("-%H:%M:%S") + ".jpg",
+                                         "images/W8_01_epoch50-" + str(i + 1) + "-loss_g-" + str(
+                                             round(loss_g.item(), 4)) + ".jpg",
                                          normalize=True, range=(-1, 1))
             for k in range(opt.batch_size):
                 torchvision.utils.save_image(fake_images[k], root + str(k + 1 + 64 * i) + ".jpg", normalize=True, range=(-1, 1))
@@ -178,5 +178,6 @@ def get_net(device):
 if __name__ == '__main__':
     import fire
     fire.Fire()
+
 
 
